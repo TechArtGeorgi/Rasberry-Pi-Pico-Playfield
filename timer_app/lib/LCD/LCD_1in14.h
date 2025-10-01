@@ -1,5 +1,5 @@
 /*****************************************************************************
-* | File        :   EPD_Test.h
+* | File        :   LCD_1in14.h
 * | Function    :   test Demo
 * | Info        :
 *----------------
@@ -26,36 +26,42 @@
 # THE SOFTWARE.
 #
 ******************************************************************************/
-#include "LCD_1in14.h"
+#ifndef __LCD_1IN14_H
+#define __LCD_1IN14_H
+
 #include "DEV_Config.h"
-#include "GUI_Paint.h"
-#include "ImageData.h"
-#include "Debug.h"
-#include "Infrared.h"
-#include <stdlib.h>		
+#include <stdint.h>
+
+#include <stdlib.h>     //itoa()
 #include <stdio.h>
 
-int main(void)
-{
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
 
-    DEV_Module_Init();
-    LCD_1IN14_Init(VERTICAL);
-    while (true)
-    {
-        LCD_1IN14_Clear(GREEN);
-        sleep_ms(500);
-        gpio_put(PICO_DEFAULT_LED_PIN, true);
-        LCD_1IN14_Clear(RED);
-        sleep_ms(1000);
-        gpio_put(PICO_DEFAULT_LED_PIN,false);
-        LCD_1IN14_Clear(RED);
-        Paint_DrawPoint(0,0,BLACK,2,DOT_FILL_AROUND);
-        Paint_DrawString_EN(0, 0, "Hello Pico!", &Font16, WHITE, BLACK);
-        sleep_ms(1000);
-    }
+#define LCD_1IN14_HEIGHT 240
+#define LCD_1IN14_WIDTH 135
 
 
-    return 0;
-}
+#define HORIZONTAL 0
+#define VERTICAL   1
+
+#define LCD_1IN14_SetBacklight(Value) ; 
+
+
+typedef struct{
+    UWORD WIDTH;
+    UWORD HEIGHT;
+    UBYTE SCAN_DIR;
+}LCD_1IN14_ATTRIBUTES;
+extern LCD_1IN14_ATTRIBUTES LCD_1IN14;
+
+/********************************************************************************
+function:	
+			Macro definition variable name
+********************************************************************************/
+void LCD_1IN14_Init(UBYTE Scan_dir);
+void LCD_1IN14_Clear(UWORD Color);
+void LCD_1IN14_Display(UWORD *Image);
+void LCD_1IN14_DisplayWindows(UWORD Xstart, UWORD Ystart, UWORD Xend, UWORD Yend, UWORD *Image);
+void LCD_1IN14_DisplayPoint(UWORD X, UWORD Y, UWORD Color);
+
+void Handler_1IN14_LCD(int signo);
+#endif

@@ -1,11 +1,15 @@
 /*****************************************************************************
-* | File        :   EPD_Test.h
-* | Function    :   test Demo
+* | File      	:	Debug.h
+* | Function    :	debug with printf
 * | Info        :
+*   Image scanning
+*      Please use progressive scanning to generate images or fonts
 *----------------
-* |	This version:   V1.0
-* | Date        :   2021-03-16
+* |	This version:   V2.0
+* | Date        :   2018-10-30
 * | Info        :   
+*   1.USE_DEBUG -> DEBUG, If you need to see the debug information, 
+*    clear the execution: make DEBUG=-DDEBUG
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documnetation files (the "Software"), to deal
@@ -25,37 +29,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 #
+
 ******************************************************************************/
-#include "LCD_1in14.h"
-#include "DEV_Config.h"
-#include "GUI_Paint.h"
-#include "ImageData.h"
-#include "Debug.h"
-#include "Infrared.h"
-#include <stdlib.h>		
+#ifndef __DEBUG_H
+#define __DEBUG_H
+
 #include <stdio.h>
 
-int main(void)
-{
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+#if DEBUG
+	#define Debug(__info,...) printf("Debug: " __info,##__VA_ARGS__)
+#else
+	#define Debug(__info,...)  
+#endif
 
-    DEV_Module_Init();
-    LCD_1IN14_Init(VERTICAL);
-    while (true)
-    {
-        LCD_1IN14_Clear(GREEN);
-        sleep_ms(500);
-        gpio_put(PICO_DEFAULT_LED_PIN, true);
-        LCD_1IN14_Clear(RED);
-        sleep_ms(1000);
-        gpio_put(PICO_DEFAULT_LED_PIN,false);
-        LCD_1IN14_Clear(RED);
-        Paint_DrawPoint(0,0,BLACK,2,DOT_FILL_AROUND);
-        Paint_DrawString_EN(0, 0, "Hello Pico!", &Font16, WHITE, BLACK);
-        sleep_ms(1000);
-    }
+#endif
 
-
-    return 0;
-}
