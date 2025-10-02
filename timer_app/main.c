@@ -1,29 +1,71 @@
 #include "pico/stdlib.h"
 #include "hardware/rtc.h"
+#include "hardware/gpio.h"
 
 #include "DEV_Config.h"
 #include "LCD_1in14.h"
 #include "GUI_Paint.h"
 #include "Fonts.h"
 #include "lib/Fonts/font48.c"
+
 #include "helpers/date_time_helper.h"
+#include "helpers/seven_seg_render.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-static void lcd_draw_time(datetime_t t, UWORD *fb) {
+/* ================= Button config ================= */
+#define BTN_PIN 15
+#define DEBOUNCE_MS 25
+
+/* ================= Mode toggle ================= */
+static bool seg_mode = true;  // true = 7-seg; false = text
+
+/* ================= Text mode render ================= */
+static void lcd_draw_time_text(datetime_t t, UWORD *fb) {
     ensure_dotw(&t);
+    Paint_Clear(BLACK);
+
     char date_line[48];
     char time_line[16];
 
     snprintf(date_line, sizeof date_line, "%s %02d/%02d/%02d",
              weekday_name(t.dotw), t.day, t.month, t.year % 100);
-    snprintf(time_line, sizeof time_line, "%02d:%02d", (int)t.hour, (int)t.min);
+    snprintf(time_line, sizeof time_line, "%02d:%02d",
+             (int)t.hour, (int)t.min);
 
-    Paint_Clear(BLACK);
-    Paint_DrawString_EN(0, 18, date_line, &Font20, BLACK, MAGENTA);
+    Paint_DrawString_EN(0, 12, date_line, &Font20, BLACK, MAGENTA);
     Paint_DrawString_EN(55, 50, time_line, &Font48, BLACK, WHITE);
+
     LCD_1IN14_Display(fb);
+}
+
+/* ================= Button init & edge-detect ================= */
+static void button_init(void) {
+    gpio_init(BTN_PIN);
+    gpio_set_dir(BTN_PIN, GPIO_IN);
+    gpio_pull_up(BTN_PIN); // active-low button to GND
+}
+
+static bool button_falling_edge(void) {
+    static uint32_t last_ms = 0;
+    static bool last_level = true; // idle high (pull-up)
+    bool level = gpio_get(BTN_PIN);
+    uint32_t ms = to_ms_since_boot(get_absolute_time());
+
+    if (ms - last_ms < DEBOUNCE_MS) return false;
+
+    bool edge = (last_level == true && level == false);
+    if (edge) last_ms = ms;
+    last_level = level;
+    return edge;
+}
+
+/* ================= Main ================= */
+static void lcd_draw(datetime_t t, UWORD *fb) {
+    if (seg_mode) sevenseg_draw_time(t, fb);
+    else          lcd_draw_time_text(t, fb);
 }
 
 int main(void) {
@@ -45,23 +87,33 @@ int main(void) {
     Paint_SetScale(65);
     Paint_Clear(WHITE);
 
+    button_init();
+
     datetime_t now;
     rtc_get_datetime(&now);
-    lcd_draw_time(now, BlackImage);
+    lcd_draw(now, BlackImage);
 
     int last_min = now.min;
 
     for (;;) {
+        if (button_falling_edge()) {
+            seg_mode = !seg_mode;
+            rtc_get_datetime(&now);
+            lcd_draw(now, BlackImage);
+        }
+
         datetime_t just_set;
         if (poll_and_set_rtc(&just_set)) {
-            lcd_draw_time(just_set, BlackImage);
+            lcd_draw(just_set, BlackImage);
             last_min = just_set.min;
         }
 
         rtc_get_datetime(&now);
         if (now.min != last_min) {
-            lcd_draw_time(now, BlackImage);
+            lcd_draw(now, BlackImage);
             last_min = now.min;
         }
+
+        sleep_ms(10);
     }
 }

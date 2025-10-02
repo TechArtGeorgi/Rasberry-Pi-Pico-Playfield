@@ -44,7 +44,7 @@ include_directories(./lib/Fonts)
 add_executable(main 
 main.c
 helpers/date_time_helper.c
-
+helpers/seven_seg_render.c
 )
 
 # enable usb output, disable uart output
