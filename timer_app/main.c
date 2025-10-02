@@ -5,7 +5,7 @@
 #include "LCD_1in14.h"
 #include "GUI_Paint.h"
 #include "Fonts.h"
-
+#include "lib/Fonts/font48.c"
 #include "helpers/date_time_helper.h" 
 
 #include <stdio.h>
@@ -18,7 +18,7 @@ static void lcd_draw_time(const datetime_t* t, UWORD *fb) {
 
     Paint_Clear(BLACK);
     Paint_DrawString_EN(45, 20, d, &Font20, BLACK, MAGENTA);
-    Paint_DrawString_EN(80, 40, h, &Font24, BLACK, WHITE);
+    Paint_DrawString_EN(45, 40, h, &Font48, BLACK, WHITE);
     LCD_1IN14_Display(fb);
 }
 
