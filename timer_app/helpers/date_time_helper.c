@@ -1,14 +1,12 @@
 #include "date_time_helper.h"
-#include "hardware/rtc.h"  
-#include <stdio.h>
-#include <string.h>
+#include "hardware/rtc.h"
+#include "tusb.h"
 #include <stdint.h>
-
+#include <stddef.h>
 
 static int calc_dotw(int y, int m, int d) {
     if (m < 3) { m += 12; y -= 1; }
-    int K = y % 100;
-    int J = y / 100;
+    int K = y % 100, J = y / 100;
     int h = (d + (13 * (m + 1)) / 5 + K + K / 4 + J / 4 + 5 * J) % 7;
     return (h + 6) % 7;
 }
@@ -17,48 +15,52 @@ static const char *WEEKDAYS[7] = {
     "Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"
 };
 
-bool parse_datetime(const char *s, datetime_t *dt) {
-    if (!s || !dt) return false;
-    return sscanf(s, "%hd-%hhd-%hhd %hhd:%hhd:%hhd",
-                  &dt->year, &dt->month, &dt->day,
-                  &dt->hour, &dt->min, &dt->sec) == 6;
+const char* weekday_name(int dotw) {
+    return (dotw >= 0 && dotw <= 6) ? WEEKDAYS[dotw] : "Unknown";
 }
 
 void ensure_dotw(datetime_t *dt) {
-    if (!dt) return;
-    if (dt->dotw < 0 || dt->dotw > 6) {
+    if (dt && (dt->dotw < 0 || dt->dotw > 6)) {
         dt->dotw = calc_dotw(dt->year, dt->month, dt->day);
     }
 }
 
-const char* weekday_name(int dotw) {
-    if (dotw < 0 || dotw > 6) return "Unknown";
-    return WEEKDAYS[dotw];
+bool parse_datetime(const char *s, datetime_t *dt) {
+    if (!s || !dt) return false;
+    dt->year  = (int16_t)((s[0]-'0')*1000 + (s[1]-'0')*100 +
+                          (s[2]-'0')*10   + (s[3]-'0'));
+    dt->month = (int8_t)((s[5]-'0')*10 + (s[6]-'0'));
+    dt->day   = (int8_t)((s[8]-'0')*10 + (s[9]-'0'));
+    dt->hour  = (int8_t)((s[11]-'0')*10 + (s[12]-'0'));
+    dt->min   = (int8_t)((s[14]-'0')*10 + (s[15]-'0'));
+    dt->sec   = (int8_t)((s[17]-'0')*10 + (s[18]-'0'));
+    dt->dotw  = -1;
+    return true;
 }
 
-void print_time(void) {
-    datetime_t now;
-    rtc_get_datetime(&now);
-    ensure_dotw(&now);
+bool poll_and_set_rtc(datetime_t *set_out) {
+    static char   buf[19];
+    static size_t pos = 0;
+    bool updated = false;
 
-    printf("%s %04d-%02d-%02d %02d:%02d:%02d\r\n",
-           WEEKDAYS[now.dotw],
-           now.year, now.month, now.day,
-           now.hour, now.min, now.sec);
-}
-
-void set_rtc_from_stdin(void) {
-    char line[64];
-    if (fgets(line, sizeof line, stdin)) {
-        size_t len = strlen(line);
-        while (len && (line[len-1] == '\n' || line[len-1] == '\r')) {
-            line[--len] = '\0';
+    tud_task();
+    while (tud_ready() && tud_cdc_available()) {
+        int ch = tud_cdc_read_char();
+        if (ch == '\r') continue;
+        if (ch == '\n') {
+            if (pos == 19) {
+                datetime_t dt;
+                if (parse_datetime(buf, &dt)) {
+                    ensure_dotw(&dt);
+                    rtc_set_datetime(&dt);
+                    if (set_out) *set_out = dt;
+                    updated = true;
+                }
+            }
+            pos = 0;
+            continue;
         }
-
-        datetime_t dt;
-        if (parse_datetime(line, &dt)) {
-            ensure_dotw(&dt);
-            rtc_set_datetime(&dt);
-        }
+        if (pos < 19) buf[pos++] = (char)ch;
     }
+    return updated;
 }

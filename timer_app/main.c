@@ -10,25 +10,26 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 static void lcd_draw_time(datetime_t t, UWORD *fb) {
     ensure_dotw(&t);
     char date_line[48];
-    char time_line[32];
+    char time_line[16];
 
-    snprintf(date_line, sizeof date_line, "%s %02d/%02d/%01d",
+    // YY uses t.year%100; change to %04d if you want full year
+    snprintf(date_line, sizeof date_line, "%s %02d/%02d/%02d",
              weekday_name(t.dotw), t.day, t.month, t.year % 100);
 
-    snprintf(time_line, sizeof time_line, "%02d:%02d", t.hour, t.min);
+    // HH:MM only (seconds removed)
+    snprintf(time_line, sizeof time_line, "%02d:%02d", (int)t.hour, (int)t.min);
 
     Paint_Clear(BLACK);
     Paint_DrawString_EN(0, 18, date_line, &Font20, BLACK, MAGENTA);
-    Paint_DrawString_EN(45, 50, time_line, &Font48, BLACK, WHITE);
+    Paint_DrawString_EN(55, 50, time_line, &Font48, BLACK, WHITE);
     LCD_1IN14_Display(fb);
 }
 
 int main(void) {
-    stdio_init_all();
+    stdio_init_all();   // initializes TinyUSB (tusb) as well
     rtc_init();
 
     DEV_Delay_ms(100);
@@ -38,7 +39,7 @@ int main(void) {
     LCD_1IN14_Init(HORIZONTAL);
     LCD_1IN14_Clear(BLACK);
 
-    UDOUBLE Imagesize = LCD_1IN14_HEIGHT * LCD_1IN14_WIDTH * 2; // same as demo
+    UDOUBLE Imagesize = LCD_1IN14_HEIGHT * LCD_1IN14_WIDTH * 2;
     UWORD *BlackImage = (UWORD*)malloc(Imagesize);
     if (!BlackImage) return -1;
 
@@ -46,19 +47,27 @@ int main(void) {
     Paint_SetScale(65);
     Paint_Clear(WHITE);
 
-    set_rtc_from_stdin();
+    datetime_t now;
+    rtc_get_datetime(&now);
+    lcd_draw_time(now, BlackImage);
 
-    uint32_t last = to_ms_since_boot(get_absolute_time());
+    int last_sec = now.sec;
+
     for (;;) {
-        uint32_t nowms = to_ms_since_boot(get_absolute_time());
-        if (nowms - last >= 1000) {
-            datetime_t now; 
-            rtc_get_datetime(&now);
-
-            // print_time();
-
-            lcd_draw_time(now, BlackImage);
-            last = nowms;
+        // If a full line arrived from the host, set RTC and redraw immediately.
+        datetime_t just_set;
+        if (poll_and_set_rtc(&just_set)) {
+            lcd_draw_time(just_set, BlackImage);
+            last_sec = just_set.sec;
         }
+
+        // Normal ticking (once per second)
+        rtc_get_datetime(&now);
+        if (now.sec != last_sec) {
+            lcd_draw_time(now, BlackImage);
+            last_sec = now.sec;
+        }
+
+        sleep_ms(1);
     }
 }
