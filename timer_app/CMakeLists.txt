@@ -45,6 +45,7 @@ add_executable(main
 main.c
 helpers/date_time_helper.c
 helpers/seven_seg_render.c
+helpers/text_mode_render.c
 )
 
 # enable usb output, disable uart output

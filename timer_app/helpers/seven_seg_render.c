@@ -1,9 +1,8 @@
 #include "seven_seg_render.h"
-
+#include <stdio.h>
 #include "GUI_Paint.h"
 #include "LCD_1in14.h"
 #include "Fonts.h"
-
 #include "date_time_helper.h"
 
 static inline void fill_rect(int x, int y, int w, int h, UWORD color) {
@@ -25,16 +24,8 @@ static void seg_G(int x,int y,int seg,int thick,UWORD c){ fill_rect(x+thick,    
 enum { SEG_A=1<<0, SEG_B=1<<1, SEG_C=1<<2, SEG_D=1<<3, SEG_E=1<<4, SEG_F=1<<5, SEG_G=1<<6 };
 
 static const uint8_t DIGIT_BITS[10] = {
-    0x3F, // 0: a b c d e f
-    0x06, // 1:   b c
-    0x5B, // 2: a b   d e   g
-    0x4F, // 3: a b c d     g
-    0x66, // 4:   b c     f g
-    0x6D, // 5: a   c d   f g
-    0x7D, // 6: a   c d e f g
-    0x07, // 7: a b c
-    0x7F, // 8: a b c d e f g
-    0x6F  // 9: a b c d   f g
+    0x3F, 0x06, 0x5B, 0x4F, 0x66,
+    0x6D, 0x7D, 0x07, 0x7F, 0x6F
 };
 
 void sevenseg_draw_digit(int x, int y, int seg, int thick, int d, UWORD fg, UWORD bg) {

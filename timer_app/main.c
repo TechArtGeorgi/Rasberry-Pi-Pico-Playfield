@@ -6,11 +6,10 @@
 #include "LCD_1in14.h"
 #include "GUI_Paint.h"
 #include "Fonts.h"
-#include "lib/Fonts/font48.c"
 
 #include "helpers/date_time_helper.h"
 #include "helpers/seven_seg_render.h"
-
+#include "helpers/text_mode_render.h"g
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -22,24 +21,6 @@
 /* ================= Mode toggle ================= */
 static bool seg_mode = true;  // true = 7-seg; false = text
 
-/* ================= Text mode render ================= */
-static void lcd_draw_time_text(datetime_t t, UWORD *fb) {
-    ensure_dotw(&t);
-    Paint_Clear(BLACK);
-
-    char date_line[48];
-    char time_line[16];
-
-    snprintf(date_line, sizeof date_line, "%s %02d/%02d/%02d",
-             weekday_name(t.dotw), t.day, t.month, t.year % 100);
-    snprintf(time_line, sizeof time_line, "%02d:%02d",
-             (int)t.hour, (int)t.min);
-
-    Paint_DrawString_EN(0, 12, date_line, &Font20, BLACK, MAGENTA);
-    Paint_DrawString_EN(55, 50, time_line, &Font48, BLACK, WHITE);
-
-    LCD_1IN14_Display(fb);
-}
 
 /* ================= Button init & edge-detect ================= */
 static void button_init(void) {
@@ -62,11 +43,6 @@ static bool button_falling_edge(void) {
     return edge;
 }
 
-/* ================= Main ================= */
-static void lcd_draw(datetime_t t, UWORD *fb) {
-    if (seg_mode) sevenseg_draw_time(t, fb);
-    else          lcd_draw_time_text(t, fb);
-}
 
 int main(void) {
     stdio_init_all();
@@ -91,26 +67,25 @@ int main(void) {
 
     datetime_t now;
     rtc_get_datetime(&now);
-    lcd_draw(now, BlackImage);
+    sevenseg_draw_time(now,BlackImage);
 
     int last_min = now.min;
 
     for (;;) {
         if (button_falling_edge()) {
-            seg_mode = !seg_mode;
             rtc_get_datetime(&now);
-            lcd_draw(now, BlackImage);
+            sevenseg_draw_time(now,BlackImage);
         }
 
         datetime_t just_set;
         if (poll_and_set_rtc(&just_set)) {
-            lcd_draw(just_set, BlackImage);
+            sevenseg_draw_time(just_set,BlackImage);
             last_min = just_set.min;
         }
 
         rtc_get_datetime(&now);
         if (now.min != last_min) {
-            lcd_draw(now, BlackImage);
+            sevenseg_draw_time(now,BlackImage);
             last_min = now.min;
         }
 
