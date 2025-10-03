@@ -47,16 +47,13 @@ void sevenseg_draw_colon(int x, int y, int dot, int gap, UWORD fg) {
     fill_rect(x, y + dot + gap, dot, dot, fg);
 }
 
-void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical) {
+void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical, UWORD fg, UWORD bg) {
     ensure_dotw(&t);
-    Paint_Clear(BLACK);
+    Paint_Clear(bg);
 
     char date_line[48];
     snprintf(date_line, sizeof date_line, "%s %02d/%02d/%02d",
              weekday_name(t.dotw), t.day, t.month, t.year % 100);
-
-    const UWORD FG = WHITE;
-    const UWORD BG = BLACK;
 
     int h1 = (t.hour / 10) % 10;
     int h2 = t.hour % 10;
@@ -64,7 +61,7 @@ void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical) {
     int m2 = t.min % 10;
 
     if (!vertical) {
-        Paint_DrawString_EN(0, 10, date_line, &Font20, BLACK, MAGENTA);
+        Paint_DrawString_EN(0, 10, date_line, &Font20, bg, MAGENTA);
 
         const int seg   = 18;
         const int thick = 6;
@@ -72,21 +69,21 @@ void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical) {
         const int colon_gap = 8;
 
         const int dw = 2*seg + thick;
-        const int x0 = 8;
-        const int y0 = 36;
+        const int x0 = 25;
+        const int y0 = 50;
 
-        sevenseg_draw_digit(x0,                 y0, seg, thick, h1, FG, BG);
-        sevenseg_draw_digit(x0 + dw + gap,      y0, seg, thick, h2, FG, BG);
+        sevenseg_draw_digit(x0,                 y0, seg, thick, h1, fg, bg);
+        sevenseg_draw_digit(x0 + dw + gap,      y0, seg, thick, h2, fg, bg);
 
         int colon_x = x0 + (dw*2) + gap*2 + 4;
         int colon_y = y0 + thick + (seg/2) - (thick/2);
-        sevenseg_draw_colon(colon_x, colon_y, thick, colon_gap, FG);
+        sevenseg_draw_colon(colon_x, colon_y, thick, colon_gap, fg);
 
         int mm_x = colon_x + thick + gap + 6;
-        sevenseg_draw_digit(mm_x,               y0, seg, thick, m1, FG, BG);
-        sevenseg_draw_digit(mm_x + dw + gap,    y0, seg, thick, m2, FG, BG);
+        sevenseg_draw_digit(mm_x,               y0, seg, thick, m1, fg, bg);
+        sevenseg_draw_digit(mm_x + dw + gap,    y0, seg, thick, m2, fg, bg);
     } else {
-        Paint_DrawString_EN(0, 6, date_line, &Font20, BLACK, MAGENTA);
+        Paint_DrawString_EN(0, 6, date_line, &Font20, bg, MAGENTA);
 
         const int seg   = 16;
         const int thick = 5;
@@ -99,18 +96,18 @@ void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical) {
 
         int total_w = 2*dw + gap;
         int x0 = (LCD_1IN14.WIDTH  - total_w) / 2;
-        int y0 = 30;
+        int y0 = 75;
 
-        sevenseg_draw_digit(x0,               y0, seg, thick, h1, FG, BG);
-        sevenseg_draw_digit(x0 + dw + gap,    y0, seg, thick, h2, FG, BG);
+        sevenseg_draw_digit(x0,               y0, seg, thick, h1, fg, bg);
+        sevenseg_draw_digit(x0 + dw + gap,    y0, seg, thick, h2, fg, bg);
 
         int colon_x = x0 + dw - thick/2;
         int colon_y = y0 + dh + (vgap - (2*thick + colon_gap))/2;
-        sevenseg_draw_colon(colon_x, colon_y, thick, colon_gap, FG);
+        sevenseg_draw_colon(colon_x, colon_y, thick, colon_gap, fg);
 
         int y1 = y0 + dh + vgap + (2*thick + colon_gap);
-        sevenseg_draw_digit(x0,               y1, seg, thick, m1, FG, BG);
-        sevenseg_draw_digit(x0 + dw + gap,    y1, seg, thick, m2, FG, BG);
+        sevenseg_draw_digit(x0,               y1, seg, thick, m1, fg, bg);
+        sevenseg_draw_digit(x0 + dw + gap,    y1, seg, thick, m2, fg, bg);
     }
 
     LCD_1IN14_Display(fb);

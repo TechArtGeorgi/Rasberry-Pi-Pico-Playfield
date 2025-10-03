@@ -44,7 +44,8 @@ static UWORD *setup_display(bool portrait, UWORD *fb_current) {
     }
     LCD_1IN14_Clear(BLACK);
 
-    UDOUBLE size_bytes = (UDOUBLE)LCD_1IN14.WIDTH * (UDOUBLE)LCD_1IN14.HEIGHT * 2; // 16bpp
+    UDOUBLE size_bytes =
+        (UDOUBLE)LCD_1IN14.WIDTH * (UDOUBLE)LCD_1IN14.HEIGHT * 2; // 16bpp
     fb_current = fb_current ? (UWORD*)realloc(fb_current, size_bytes)
                             : (UWORD*)malloc(size_bytes);
     if (!fb_current) return NULL;
@@ -65,13 +66,15 @@ int main(void) {
 
     button_init();
 
-    bool portrait = false;
+    bool portrait = false;                       // false = horizontal, true = vertical
     UWORD *fb = setup_display(portrait, NULL);
     if (!fb) return -1;
 
     datetime_t now;
     rtc_get_datetime(&now);
-    sevenseg_draw_time(now, fb, portrait);
+
+    UWORD fg = portrait ? YELLOW : WHITE;        // horizontal: WHITE, vertical: YELLOW
+    sevenseg_draw_time(now, fb, portrait, fg, BLACK);
 
     int last_min = now.min;
 
@@ -80,20 +83,24 @@ int main(void) {
             portrait = !portrait;                // toggle orientation
             fb = setup_display(portrait, fb);    // re-init + rebuild Paint
             if (!fb) return -1;
+
             rtc_get_datetime(&now);
-            sevenseg_draw_time(now, fb, portrait);
+            fg = portrait ? YELLOW : WHITE;      // update color on toggle
+            sevenseg_draw_time(now, fb, portrait, fg, BLACK);
             last_min = now.min;
         }
 
         datetime_t just_set;
         if (poll_and_set_rtc(&just_set)) {
-            sevenseg_draw_time(just_set, fb, portrait);
+            fg = portrait ? YELLOW : WHITE;      // use current orientation color
+            sevenseg_draw_time(just_set, fb, portrait, fg, BLACK);
             last_min = just_set.min;
         }
 
         rtc_get_datetime(&now);
         if (now.min != last_min) {
-            sevenseg_draw_time(now, fb, portrait);
+            fg = portrait ? YELLOW : WHITE;      // use current orientation color
+            sevenseg_draw_time(now, fb, portrait, fg, BLACK);
             last_min = now.min;
         }
 
