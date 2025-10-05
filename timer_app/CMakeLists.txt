@@ -49,7 +49,8 @@ helpers/text_mode_render.c
 helpers/lcd_bg_gradient.c
 helpers/lcd_bg_presets.c
 helpers/button_logic.c
-helpers/display_fb.c)
+helpers/display_fb.c
+helpers/date_draw_overlay.c)
 
 # enable usb output, disable uart output
 pico_enable_stdio_usb(main 1)

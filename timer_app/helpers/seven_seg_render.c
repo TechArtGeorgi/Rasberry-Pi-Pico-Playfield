@@ -60,7 +60,6 @@ void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical, UWORD fg, UWORD 
     int m2 = t.min % 10;
 
     if (!vertical) {
-        Paint_DrawString_EN(0, 10, date_line, &Font20, bg, MAGENTA);
 
         const int seg   = 18;
         const int thick = 6;
@@ -82,7 +81,6 @@ void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical, UWORD fg, UWORD 
         sevenseg_draw_digit(mm_x,               y0, seg, thick, m1, fg, bg);
         sevenseg_draw_digit(mm_x + dw + gap,    y0, seg, thick, m2, fg, bg);
     } else {
-        Paint_DrawString_EN(0, 6, date_line, &Font20, bg, MAGENTA);
 
         const int seg   = 16;
         const int thick = 5;

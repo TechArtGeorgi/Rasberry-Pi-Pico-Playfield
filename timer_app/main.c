@@ -16,6 +16,7 @@
 #include "helpers/lcd_bg_presets.h"
 #include "helpers/button_logic.h"
 #include "helpers/display_fb.h"
+#include "helpers/date_draw_overlay.h"
 
 int main(void) {
 
@@ -33,12 +34,13 @@ int main(void) {
     if (!fb) return -1;
     
     LcdBgGradient bg; 
-    lcd_bg_init_gradient(&bg, SOLID_BLACK, 1);
+    lcd_bg_init_gradient(&bg, GRADIENT_SUNSET, 3);
 
     datetime_t now;
     rtc_get_datetime(&now);
 
     lcd_bg_draw(fb, portrait, &bg);
+    date_overlay_draw(&now, 0, portrait ? 6 : 10, &Font20, WHITE, WHITE);
     sevenseg_draw_time(now, fb, portrait, WHITE, BLACK);
     LCD_1IN14_Display(fb);
 
@@ -53,23 +55,26 @@ int main(void) {
             rtc_get_datetime(&now);
 
             lcd_bg_draw(fb, portrait, &bg);
+            date_overlay_draw(&now, 0, portrait ? 6 : 10, &Font20, WHITE, WHITE);
             sevenseg_draw_time(now, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
             LCD_1IN14_Display(fb);
-
             last_min = now.min;
         }
 
         datetime_t just_set;
         if (poll_and_set_rtc(&just_set)) {
             lcd_bg_draw(fb, portrait, &bg);
+            date_overlay_draw(&just_set, 0, portrait ? 6 : 10, &Font20, WHITE, WHITE);
             sevenseg_draw_time(just_set, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
             LCD_1IN14_Display(fb);
+            now = just_set;
             last_min = just_set.min;
         }
 
         rtc_get_datetime(&now);
         if (now.min != last_min) {
             lcd_bg_draw(fb, portrait, &bg);
+            date_overlay_draw(&now, 0, portrait ? 6 : 10, &Font20, WHITE, WHITE);
             sevenseg_draw_time(now, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
             LCD_1IN14_Display(fb);
             last_min = now.min;
