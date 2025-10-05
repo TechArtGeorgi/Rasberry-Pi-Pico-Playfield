@@ -14,46 +14,11 @@
 #include "helpers/seven_seg_render.h"
 #include "helpers/lcd_bg_gradient.h"
 #include "helpers/lcd_bg_presets.h"
-
-/* Button */
-#define BTN_PIN      15
-#define DEBOUNCE_MS  25
-
-static void button_init(void) {
-    gpio_init(BTN_PIN);
-    gpio_set_dir(BTN_PIN, GPIO_IN);
-    gpio_pull_up(BTN_PIN);
-}
-
-static bool button_falling_edge(void) {
-    static uint32_t last_ms = 0;
-    static bool last_level = true;
-    bool level = gpio_get(BTN_PIN);
-    uint32_t ms = to_ms_since_boot(get_absolute_time());
-    if (ms - last_ms < DEBOUNCE_MS) return false;
-    bool edge = (last_level == true && level == false);
-    if (edge) last_ms = ms;
-    last_level = level;
-    return edge;
-}
-
-/* Display / framebuffer */
-static UWORD *setup_display(bool portrait, UWORD *fb_current) {
-    LCD_1IN14_Init(portrait ? VERTICAL : HORIZONTAL);
-    LCD_1IN14_Clear(BLACK);
-
-    UDOUBLE size_bytes = (UDOUBLE)LCD_1IN14.WIDTH * (UDOUBLE)LCD_1IN14.HEIGHT * 2;
-    fb_current = fb_current ? (UWORD*)realloc(fb_current, size_bytes)
-                            : (UWORD*)malloc(size_bytes);
-    if (!fb_current) return NULL;
-
-    Paint_NewImage((UBYTE*)fb_current, LCD_1IN14.WIDTH, LCD_1IN14.HEIGHT, 0, BLACK);
-    Paint_SetScale(65);
-    Paint_Clear(BLACK);
-    return fb_current;
-}
+#include "helpers/button_logic.h"
+#include "helpers/display_fb.h"
 
 int main(void) {
+
     stdio_init_all();
     rtc_init();
 
@@ -68,7 +33,7 @@ int main(void) {
     if (!fb) return -1;
     
     LcdBgGradient bg; 
-    lcd_bg_init_gradient(&bg, GRADIENT_SUNSET, 1);
+    lcd_bg_init_gradient(&bg, SOLID_BLACK, 1);
 
     datetime_t now;
     rtc_get_datetime(&now);
