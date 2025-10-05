@@ -12,20 +12,22 @@
 
 #include "helpers/date_time_helper.h"
 #include "helpers/seven_seg_render.h"
+#include "helpers/lcd_bg_gradient.h"
+#include "helpers/lcd_bg_presets.h"
 
-/* ===== Button ===== */
+/* Button */
 #define BTN_PIN      15
 #define DEBOUNCE_MS  25
 
 static void button_init(void) {
     gpio_init(BTN_PIN);
     gpio_set_dir(BTN_PIN, GPIO_IN);
-    gpio_pull_up(BTN_PIN);   // active-low
+    gpio_pull_up(BTN_PIN);
 }
 
 static bool button_falling_edge(void) {
     static uint32_t last_ms = 0;
-    static bool last_level = true; // idle high (pull-up)
+    static bool last_level = true;
     bool level = gpio_get(BTN_PIN);
     uint32_t ms = to_ms_since_boot(get_absolute_time());
     if (ms - last_ms < DEBOUNCE_MS) return false;
@@ -35,23 +37,18 @@ static bool button_falling_edge(void) {
     return edge;
 }
 
-/* ===== Display / framebuffer ===== */
+/* Display / framebuffer */
 static UWORD *setup_display(bool portrait, UWORD *fb_current) {
-    if (portrait) {
-        LCD_1IN14_Init(VERTICAL);
-    } else {
-        LCD_1IN14_Init(HORIZONTAL);
-    }
+    LCD_1IN14_Init(portrait ? VERTICAL : HORIZONTAL);
     LCD_1IN14_Clear(BLACK);
 
-    UDOUBLE size_bytes =
-        (UDOUBLE)LCD_1IN14.WIDTH * (UDOUBLE)LCD_1IN14.HEIGHT * 2; // 16bpp
+    UDOUBLE size_bytes = (UDOUBLE)LCD_1IN14.WIDTH * (UDOUBLE)LCD_1IN14.HEIGHT * 2;
     fb_current = fb_current ? (UWORD*)realloc(fb_current, size_bytes)
                             : (UWORD*)malloc(size_bytes);
     if (!fb_current) return NULL;
 
     Paint_NewImage((UBYTE*)fb_current, LCD_1IN14.WIDTH, LCD_1IN14.HEIGHT, 0, BLACK);
-    Paint_SetScale(65);   // 65K color
+    Paint_SetScale(65);
     Paint_Clear(BLACK);
     return fb_current;
 }
@@ -66,44 +63,51 @@ int main(void) {
 
     button_init();
 
-    bool portrait = false;                       // false = horizontal, true = vertical
+    bool portrait = false;
     UWORD *fb = setup_display(portrait, NULL);
     if (!fb) return -1;
+    
+    LcdBgGradient bg; 
+    lcd_bg_init_gradient(&bg, GRADIENT_SUNSET, 1);
 
     datetime_t now;
     rtc_get_datetime(&now);
 
-    UWORD fg = portrait ? YELLOW : WHITE;        // horizontal: WHITE, vertical: YELLOW
-    sevenseg_draw_time(now, fb, portrait, fg, BLACK);
+    lcd_bg_draw(fb, portrait, &bg);
+    sevenseg_draw_time(now, fb, portrait, WHITE, BLACK);
+    LCD_1IN14_Display(fb);
 
     int last_min = now.min;
 
     for (;;) {
         if (button_falling_edge()) {
-            portrait = !portrait;                // toggle orientation
-            fb = setup_display(portrait, fb);    // re-init + rebuild Paint
+            portrait = !portrait;
+            fb = setup_display(portrait, fb);
             if (!fb) return -1;
 
             rtc_get_datetime(&now);
-            fg = portrait ? YELLOW : WHITE;      // update color on toggle
-            sevenseg_draw_time(now, fb, portrait, fg, BLACK);
+
+            lcd_bg_draw(fb, portrait, &bg);
+            sevenseg_draw_time(now, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
+            LCD_1IN14_Display(fb);
+
             last_min = now.min;
         }
 
         datetime_t just_set;
         if (poll_and_set_rtc(&just_set)) {
-            fg = portrait ? YELLOW : WHITE;      // use current orientation color
-            sevenseg_draw_time(just_set, fb, portrait, fg, BLACK);
+            lcd_bg_draw(fb, portrait, &bg);
+            sevenseg_draw_time(just_set, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
+            LCD_1IN14_Display(fb);
             last_min = just_set.min;
         }
 
         rtc_get_datetime(&now);
         if (now.min != last_min) {
-            fg = portrait ? YELLOW : WHITE;      // use current orientation color
-            sevenseg_draw_time(now, fb, portrait, fg, BLACK);
+            lcd_bg_draw(fb, portrait, &bg);
+            sevenseg_draw_time(now, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
+            LCD_1IN14_Display(fb);
             last_min = now.min;
         }
-
-        sleep_ms(10);
     }
 }
