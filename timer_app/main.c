@@ -12,7 +12,10 @@
 
 #include "helpers/date_time_helper.h"
 #include "helpers/seven_seg_render.h"
+#include "helpers/lcd_bg_gradient.h"
+#include "helpers/lcd_bg_presets.h"
 
+/* Button */
 #define BTN_PIN      15
 #define DEBOUNCE_MS  25
 
@@ -34,14 +37,16 @@ static bool button_falling_edge(void) {
     return edge;
 }
 
+/* Display / framebuffer */
 static UWORD *setup_display(bool portrait, UWORD *fb_current) {
-    if (portrait) LCD_1IN14_Init(VERTICAL);
-    else          LCD_1IN14_Init(HORIZONTAL);
+    LCD_1IN14_Init(portrait ? VERTICAL : HORIZONTAL);
     LCD_1IN14_Clear(BLACK);
+
     UDOUBLE size_bytes = (UDOUBLE)LCD_1IN14.WIDTH * (UDOUBLE)LCD_1IN14.HEIGHT * 2;
     fb_current = fb_current ? (UWORD*)realloc(fb_current, size_bytes)
                             : (UWORD*)malloc(size_bytes);
     if (!fb_current) return NULL;
+
     Paint_NewImage((UBYTE*)fb_current, LCD_1IN14.WIDTH, LCD_1IN14.HEIGHT, 0, BLACK);
     Paint_SetScale(65);
     Paint_Clear(BLACK);
@@ -61,10 +66,16 @@ int main(void) {
     bool portrait = false;
     UWORD *fb = setup_display(portrait, NULL);
     if (!fb) return -1;
+    
+    LcdBgGradient bg; 
+    lcd_bg_init_gradient(&bg, GRADIENT_SUNSET, 1);
 
     datetime_t now;
     rtc_get_datetime(&now);
+
+    lcd_bg_draw(fb, portrait, &bg);
     sevenseg_draw_time(now, fb, portrait, WHITE, BLACK);
+    LCD_1IN14_Display(fb);
 
     int last_min = now.min;
 
@@ -73,23 +84,30 @@ int main(void) {
             portrait = !portrait;
             fb = setup_display(portrait, fb);
             if (!fb) return -1;
+
             rtc_get_datetime(&now);
+
+            lcd_bg_draw(fb, portrait, &bg);
             sevenseg_draw_time(now, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
+            LCD_1IN14_Display(fb);
+
             last_min = now.min;
         }
 
         datetime_t just_set;
         if (poll_and_set_rtc(&just_set)) {
+            lcd_bg_draw(fb, portrait, &bg);
             sevenseg_draw_time(just_set, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
+            LCD_1IN14_Display(fb);
             last_min = just_set.min;
         }
 
         rtc_get_datetime(&now);
         if (now.min != last_min) {
+            lcd_bg_draw(fb, portrait, &bg);
             sevenseg_draw_time(now, fb, portrait, portrait ? YELLOW : WHITE, BLACK);
+            LCD_1IN14_Display(fb);
             last_min = now.min;
         }
-
-        sleep_ms(10);
     }
 }

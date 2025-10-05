@@ -46,7 +46,8 @@ main.c
 helpers/date_time_helper.c
 helpers/seven_seg_render.c
 helpers/text_mode_render.c
-)
+helpers/lcd_bg_gradient.c
+helpers/lcd_bg_presets.c)
 
 # enable usb output, disable uart output
 pico_enable_stdio_usb(main 1)

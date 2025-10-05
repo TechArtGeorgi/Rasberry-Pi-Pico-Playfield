@@ -1,69 +1,26 @@
 #include "seven_seg_render.h"
-
-#include <stdint.h>
 #include <stdio.h>
 #include "GUI_Paint.h"
 #include "LCD_1in14.h"
 #include "Fonts.h"
 #include "date_time_helper.h"
-// Replace your draw_gradient_bg_raw(...) with this version
-static inline UWORD gray565(uint8_t g8) {
-    uint16_t r5 = g8 >> 3;
-    uint16_t g6 = g8 >> 2;
-    uint16_t b5 = g8 >> 3;
-    return (UWORD)((r5 << 11) | (g6 << 5) | b5);   // RGB565
-}
 
-static void draw_gradient_bg_raw(UWORD *fb, bool vertical) {
-    const int W = LCD_1IN14.WIDTH;
-    const int H = LCD_1IN14.HEIGHT;
-    if (!fb) return;
-
-    // Treat framebuffer as bytes; store High then Low byte per pixel.
-    UBYTE *pb = (UBYTE*)fb;
-
-    if (!vertical) {
-        // Left → right
-        for (int y = 0; y < H; ++y) {
-            UBYTE *row = pb + (y * W * 2);
-            for (int x = 0; x < W; ++x) {
-                uint8_t g = (uint8_t)((x * 255) / (W - 1));
-                UWORD c = gray565(g);
-                row[2*x + 0] = (UBYTE)(c >> 8);   // High byte first
-                row[2*x + 1] = (UBYTE)(c & 0xFF); // Low byte
-            }
-        }
-    } else {
-        // Top → bottom
-        for (int y = 0; y < H; ++y) {
-            uint8_t g = (uint8_t)((y * 255) / (H - 1));
-            UWORD c = gray565(g);
-            UBYTE hi = (UBYTE)(c >> 8);
-            UBYTE lo = (UBYTE)(c & 0xFF);
-            UBYTE *row = pb + (y * W * 2);
-            for (int x = 0; x < W; ++x) {
-                row[2*x + 0] = hi;
-                row[2*x + 1] = lo;
-            }
-        }
-    }
-}
-
-
-static inline void fill_rect(int x, int y, int w, int h, UWORD color) {
+void sevenseg_fill_rect(int x, int y, int w, int h, UWORD color) {
     if (w <= 0 || h <= 0) return;
     for (int i = 0; i < h; ++i) {
-        Paint_DrawLine(x, y + i, x + w - 1, y + i, color, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+        Paint_DrawLine(x, y + i, x + w - 1, y + i, color,
+                       DOT_PIXEL_1X1, LINE_STYLE_SOLID);
     }
 }
 
-static void seg_A(int x,int y,int seg,int thick,UWORD c){ fill_rect(x+thick,        y,                   seg,   thick, c); }
-static void seg_B(int x,int y,int seg,int thick,UWORD c){ fill_rect(x+thick+seg,    y+thick,             thick, seg,   c); }
-static void seg_C(int x,int y,int seg,int thick,UWORD c){ fill_rect(x+thick+seg,    y+2*thick+seg,       thick, seg,   c); }
-static void seg_D(int x,int y,int seg,int thick,UWORD c){ fill_rect(x+thick,        y+2*(thick+seg),     seg,   thick, c); }
-static void seg_E(int x,int y,int seg,int thick,UWORD c){ fill_rect(x,              y+2*thick+seg,       thick, seg,   c); }
-static void seg_F(int x,int y,int seg,int thick,UWORD c){ fill_rect(x,              y+thick,             thick, seg,   c); }
-static void seg_G(int x,int y,int seg,int thick,UWORD c){ fill_rect(x+thick,        y+thick+seg,         seg,   thick, c); }
+/* Individual segments (A..G) */
+void sevenseg_seg_A(int x,int y,int seg,int thick,UWORD c){ sevenseg_fill_rect(x+thick,        y,                   seg,   thick, c); }
+void sevenseg_seg_B(int x,int y,int seg,int thick,UWORD c){ sevenseg_fill_rect(x+thick+seg,    y+thick,             thick, seg,   c); }
+void sevenseg_seg_C(int x,int y,int seg,int thick,UWORD c){ sevenseg_fill_rect(x+thick+seg,    y+2*thick+seg,       thick, seg,   c); }
+void sevenseg_seg_D(int x,int y,int seg,int thick,UWORD c){ sevenseg_fill_rect(x+thick,        y+2*(thick+seg),     seg,   thick, c); }
+void sevenseg_seg_E(int x,int y,int seg,int thick,UWORD c){ sevenseg_fill_rect(x,              y+2*thick+seg,       thick, seg,   c); }
+void sevenseg_seg_F(int x,int y,int seg,int thick,UWORD c){ sevenseg_fill_rect(x,              y+thick,             thick, seg,   c); }
+void sevenseg_seg_G(int x,int y,int seg,int thick,UWORD c){ sevenseg_fill_rect(x+thick,        y+thick+seg,         seg,   thick, c); }
 
 enum { SEG_A=1<<0, SEG_B=1<<1, SEG_C=1<<2, SEG_D=1<<3, SEG_E=1<<4, SEG_F=1<<5, SEG_G=1<<6 };
 
@@ -72,38 +29,26 @@ static const uint8_t DIGIT_BITS[10] = {
 };
 
 void sevenseg_draw_digit(int x, int y, int seg, int thick, int d, UWORD fg, UWORD bg) {
-    int w = 2*seg + thick;
-    int h = 3*seg + 2*thick;
-
-    // REMOVE this line so we don't paint a solid box behind the segments:
-    // fill_rect(x, y, w, h, bg);
-
+    (void)bg; // no box fill — digits overlay the existing background/gradient
     uint8_t bits = (d >= 0 && d <= 9) ? DIGIT_BITS[d] : 0;
 
-    if (bits & SEG_A) seg_A(x,y,seg,thick,fg);
-    if (bits & SEG_B) seg_B(x,y,seg,thick,fg);
-    if (bits & SEG_C) seg_C(x,y,seg,thick,fg);
-    if (bits & SEG_D) seg_D(x,y,seg,thick,fg);
-    if (bits & SEG_E) seg_E(x,y,seg,thick,fg);
-    if (bits & SEG_F) seg_F(x,y,seg,thick,fg);
-    if (bits & SEG_G) seg_G(x,y,seg,thick,fg);
+    if (bits & SEG_A) sevenseg_seg_A(x,y,seg,thick,fg);
+    if (bits & SEG_B) sevenseg_seg_B(x,y,seg,thick,fg);
+    if (bits & SEG_C) sevenseg_seg_C(x,y,seg,thick,fg);
+    if (bits & SEG_D) sevenseg_seg_D(x,y,seg,thick,fg);
+    if (bits & SEG_E) sevenseg_seg_E(x,y,seg,thick,fg);
+    if (bits & SEG_F) sevenseg_seg_F(x,y,seg,thick,fg);
+    if (bits & SEG_G) sevenseg_seg_G(x,y,seg,thick,fg);
 }
 
-
 void sevenseg_draw_colon(int x, int y, int dot, int gap, UWORD fg) {
-    fill_rect(x, y,             dot, dot, fg);
-    fill_rect(x, y + dot + gap, dot, dot, fg);
+    sevenseg_fill_rect(x, y,             dot, dot, fg);
+    sevenseg_fill_rect(x, y + dot + gap, dot, dot, fg);
 }
 
 void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical, UWORD fg, UWORD bg) {
+    (void)fb;
     ensure_dotw(&t);
-
-    // Fill the framebuffer directly so we know pixels change
-    draw_gradient_bg_raw(fb, vertical);
-
-    // Make sure GUI_Paint is still targeting this buffer
-    // (setup_display already did Paint_NewImage on fb, but this is harmless)
-    Paint_SelectImage((UBYTE*)fb);
 
     char date_line[48];
     snprintf(date_line, sizeof date_line, "%s %02d/%02d/%02d",
@@ -163,6 +108,4 @@ void sevenseg_draw_time(datetime_t t, UWORD *fb, bool vertical, UWORD fg, UWORD 
         sevenseg_draw_digit(x0,               y1, seg, thick, m1, fg, bg);
         sevenseg_draw_digit(x0 + dw + gap,    y1, seg, thick, m2, fg, bg);
     }
-
-    LCD_1IN14_Display(fb);
 }
