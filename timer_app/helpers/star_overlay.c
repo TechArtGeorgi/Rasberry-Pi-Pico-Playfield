@@ -1,57 +1,90 @@
 #include "star_overlay.h"
 #include "LCD_1in14.h"
 
-static inline uint32_t rng_next(uint32_t *s) { *s = *s * 1664525u + 1013904223u; return *s; }
-
-void star_overlay_init(Star *stars, int count, uint32_t seed) {
-    if (!stars || count <= 0) return;
-    uint32_t s = seed ? seed : 0x9E3779B9u;
-    for (int i = 0; i < count; ++i) {
-        uint32_t r1 = rng_next(&s);
-        uint32_t r2 = rng_next(&s);
-        uint32_t r3 = rng_next(&s);
-        stars[i].ux    = (uint16_t)(r1 >> 16);   // 0..65535
-        stars[i].uy    = (uint16_t)(r2 >> 16);   // 0..65535
-        stars[i].phase = (uint16_t)(r3 >> 16);   // 0..65535
-    }
+static inline uint32_t lcg(uint32_t *state) {
+    *state = (*state * 1664525u) + 1013904223u;
+    return *state;
 }
 
-static inline UWORD white_at_alpha(uint8_t a) {
-    uint32_t r5 = (a * 31 + 127) / 255;
-    uint32_t g6 = (a * 63 + 127) / 255;
-    uint32_t b5 = (a * 31 + 127) / 255;
-    return (UWORD)((r5 << 11) | (g6 << 5) | b5);
+void star_overlay_init(Star *stars, int count,
+                       uint32_t seed,
+                       int size_min, int size_max)
+{
+    if (!stars || count <= 0) return;
+
+    if (size_min < 1) size_min = 1;
+    if (size_max < size_min) size_max = size_min;
+
+    const int W = LCD_1IN14.WIDTH;
+    const int H = LCD_1IN14.HEIGHT;
+
+    uint32_t rng = seed ? seed : 0xA5A5F00Du;
+
+    for (int i = 0; i < count; ++i) {
+        uint32_t r1 = lcg(&rng);
+        uint32_t r2 = lcg(&rng);
+        uint32_t r3 = lcg(&rng);
+
+        stars[i].x = (uint16_t)(r1 % W);
+        stars[i].y = (uint16_t)(r2 % H);
+        stars[i].phase_ms = (uint16_t)(r3 % 4000u); // default spread; period is passed at draw time
+        uint32_t span = (uint32_t)(size_max - size_min + 1);
+        stars[i].size = (uint8_t)(size_min + (lcg(&rng) % span));
+    }
 }
 
 void star_overlay_draw(UWORD *fb, uint32_t t_ms,
                        const Star *stars, int count,
                        uint32_t period_ms)
 {
-    if (!fb || !stars || count <= 0) return;
-    if (period_ms < 2) period_ms = 2;
+    if (!fb || !stars || count <= 0 || period_ms < 2) return;
 
     const int W = LCD_1IN14.WIDTH;
     const int H = LCD_1IN14.HEIGHT;
-    const uint32_t half = period_ms >> 1;
+
+    // helper to write one pixel
+    #define PX(py, px, color) do { \
+        UBYTE *row__ = (UBYTE*)fb + ((py) * W * 2); \
+        row__[2 * (px) + 0] = (UBYTE)((color) >> 8); \
+        row__[2 * (px) + 1] = (UBYTE)((color) & 0xFF); \
+    } while (0)
 
     for (int i = 0; i < count; ++i) {
-        // Map normalized coords to current framebuffer size
-        int x = (int)(((uint32_t)stars[i].ux * (uint32_t)(W - 1)) >> 16);
-        int y = (int)(((uint32_t)stars[i].uy * (uint32_t)(H - 1)) >> 16);
-        if ((unsigned)x >= (unsigned)W || (unsigned)y >= (unsigned)H) continue;
+        int x = stars[i].x;
+        int y = stars[i].y;
+        int s = stars[i].size;
 
-        // Per-star phase as time offset in ms
-        uint32_t phase_ms = ((uint32_t)stars[i].phase * period_ms) >> 16;
-        uint32_t u = (t_ms + phase_ms) % period_ms;
+        // Triangle-wave brightness 0..255..0 over period_ms, with per-star phase
+        uint32_t ph = (t_ms + stars[i].phase_ms) % period_ms;
+        uint32_t half = period_ms >> 1;
+        uint32_t a = (ph < half)
+                   ? (ph * 255u) / (half ? half : 1u)
+                   : ((period_ms - ph) * 255u) / (half ? half : 1u);
 
-        // Triangle wave 255->0->255 (invert so we start at 255)
-        uint32_t ramp = (u <= half) ? u : (period_ms - u); // 0..half
-        uint32_t a    = 255u - (ramp * 255u / half);       // 255..0..255
-        UWORD c = white_at_alpha((uint8_t)a);
+        // White at brightness 'a' on black background => packed RGB565
+        // r,b use 5 bits (>>3), g uses 6 bits (>>2)
+        UWORD c = (UWORD)(((a >> 3) << 11) | ((a >> 2) << 5) | (a >> 3));
 
-        // Write pixel
-        UBYTE *row = (UBYTE*)fb + (y * W * 2);
-        row[2 * x + 0] = (UBYTE)(c >> 8);
-        row[2 * x + 1] = (UBYTE)(c & 0xFF);
+        // Draw a small centered square (size s)
+        int r = s / 2;               // radius on each side
+        int x0 = x - r;
+        int y0 = y - r;
+        int x1 = x0 + s - 1;
+        int y1 = y0 + s - 1;
+
+        if (x0 > W - 1 || y0 > H - 1 || x1 < 0 || y1 < 0) continue; // fully offscreen
+
+        if (x0 < 0) x0 = 0;
+        if (y0 < 0) y0 = 0;
+        if (x1 >= W) x1 = W - 1;
+        if (y1 >= H) y1 = H - 1;
+
+        for (int py = y0; py <= y1; ++py) {
+            for (int px = x0; px <= x1; ++px) {
+                PX(py, px, c);
+            }
+        }
     }
+
+    #undef PX
 }
