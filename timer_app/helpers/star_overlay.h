@@ -2,42 +2,29 @@
 #define STAR_OVERLAY_H
 
 #include <stdint.h>
-#include "DEV_Config.h"   // for UWORD
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <stdbool.h>
+#include "DEV_Config.h"   // UWORD
+#include "LCD_1in14.h"    // for WIDTH/HEIGHT
 
 typedef struct {
-    uint16_t x;         // pixel position
+    uint16_t x;
     uint16_t y;
-    uint16_t phase_ms;  // initial phase offset in ms
-    uint8_t  size;      // drawn size in pixels (square, centered)
+    uint16_t phase_ms;   // per-star phase offset (desync)
+    uint8_t  size;       // 1..N (keep small to avoid “big” stars)
 } Star;
 
-/**
- * Seed a starfield once.
- * - stars: array you provide
- * - count: number of stars
- * - seed:  deterministic seed (any uint32)
- * - size_min/max: inclusive size range (clamped to >=1, size_min<=size_max)
- */
-void star_overlay_init(Star *stars, int count,
-                       uint32_t seed,
-                       int size_min, int size_max);
+/* Seed once. size_min/max are inclusive. */
+void star_overlay_init(Star *stars, int count, uint32_t seed,
+                       uint8_t size_min, uint8_t size_max);
 
-/**
- * Draw twinkling stars over the existing framebuffer (assumes black bg or you want additive white).
- * - t_ms:        time in ms (monotonic)
- * - period_ms:   full fade in+out period per star (e.g. 4000)
- * - stars/count: star array seeded by star_overlay_init
- * All stars are rendered in white with brightness driven by a triangle wave.
- */
+/* Draw over current framebuffer without reseeding.
+   - t_ms:       ms since boot
+   - period_ms:  full up+down fade (bigger = slower)
+   - minB,maxB:  brightness range (0..255), e.g. 16..180
+*/
 void star_overlay_draw(UWORD *fb, uint32_t t_ms,
                        const Star *stars, int count,
-                       uint32_t period_ms);
+                       uint32_t period_ms,
+                       uint8_t minB, uint8_t maxB);
 
-#ifdef __cplusplus
-}
-#endif
 #endif

@@ -1,90 +1,94 @@
 #include "star_overlay.h"
-#include "LCD_1in14.h"
 
-static inline uint32_t lcg(uint32_t *state) {
-    *state = (*state * 1664525u) + 1013904223u;
-    return *state;
+/* simple LCG for stable pseudo-random in init only */
+static inline uint32_t lcg(uint32_t *s) {
+    *s = (*s * 1664525u) + 1013904223u;
+    return *s;
 }
 
-void star_overlay_init(Star *stars, int count,
-                       uint32_t seed,
-                       int size_min, int size_max)
-{
-    if (!stars || count <= 0) return;
+/* strict grayscale: map 0..255 -> RGB565 gray (no tint) */
+static inline UWORD gray565(uint8_t g) {
+    uint16_t r5 = g >> 3;       // 5 bits
+    uint16_t g6 = g >> 2;       // 6 bits
+    uint16_t b5 = g >> 3;       // 5 bits
+    return (UWORD)((r5 << 11) | (g6 << 5) | b5);
+}
 
-    if (size_min < 1) size_min = 1;
+/* Clamp helper */
+static inline uint8_t u8clamp(int v) {
+    if (v < 0) return 0;
+    if (v > 255) return 255;
+    return (uint8_t)v;
+}
+
+void star_overlay_init(Star *stars, int count, uint32_t seed,
+                       uint8_t size_min, uint8_t size_max) {
+    if (!stars || count <= 0) return;
+    if (size_min == 0) size_min = 1;
     if (size_max < size_min) size_max = size_min;
 
+    uint32_t s = seed;
     const int W = LCD_1IN14.WIDTH;
     const int H = LCD_1IN14.HEIGHT;
 
-    uint32_t rng = seed ? seed : 0xA5A5F00Du;
-
     for (int i = 0; i < count; ++i) {
-        uint32_t r1 = lcg(&rng);
-        uint32_t r2 = lcg(&rng);
-        uint32_t r3 = lcg(&rng);
+        uint32_t r = lcg(&s);
+        stars[i].x = (uint16_t)(r % W);
 
-        stars[i].x = (uint16_t)(r1 % W);
-        stars[i].y = (uint16_t)(r2 % H);
-        stars[i].phase_ms = (uint16_t)(r3 % 4000u); // default spread; period is passed at draw time
-        uint32_t span = (uint32_t)(size_max - size_min + 1);
-        stars[i].size = (uint8_t)(size_min + (lcg(&rng) % span));
+        r = lcg(&s);
+        stars[i].y = (uint16_t)(r % H);
+
+        // random phase 0..period-1 (we’ll mod by period at draw time)
+        r = lcg(&s);
+        stars[i].phase_ms = (uint16_t)(r & 0xFFFFu);
+
+        // tiny sizes to avoid “big” stars look
+        r = lcg(&s);
+        uint8_t span = (uint8_t)(size_max - size_min + 1);
+        stars[i].size = (uint8_t)(size_min + (span ? (r % span) : 0));
     }
 }
 
 void star_overlay_draw(UWORD *fb, uint32_t t_ms,
                        const Star *stars, int count,
-                       uint32_t period_ms)
-{
-    if (!fb || !stars || count <= 0 || period_ms < 2) return;
+                       uint32_t period_ms,
+                       uint8_t minB, uint8_t maxB) {
+    if (!fb || !stars || count <= 0 || period_ms == 0) return;
 
+    if (minB > maxB) { uint8_t tmp = minB; minB = maxB; maxB = tmp; }
     const int W = LCD_1IN14.WIDTH;
     const int H = LCD_1IN14.HEIGHT;
 
-    // helper to write one pixel
-    #define PX(py, px, color) do { \
-        UBYTE *row__ = (UBYTE*)fb + ((py) * W * 2); \
-        row__[2 * (px) + 0] = (UBYTE)((color) >> 8); \
-        row__[2 * (px) + 1] = (UBYTE)((color) & 0xFF); \
-    } while (0)
-
+    // For each star: compute brightness with a triangle wave
+    // phase = (t_ms + phase_ms) % period; wave 0..1..0
     for (int i = 0; i < count; ++i) {
-        int x = stars[i].x;
-        int y = stars[i].y;
-        int s = stars[i].size;
+        uint32_t phase = (t_ms + (uint32_t)stars[i].phase_ms) % period_ms;
+        // triangle in [0..1]: up on first half, down on second
+        float u = (float)phase / (float)period_ms;
+        float tri = (u < 0.5f) ? (u * 2.0f) : (2.0f - u * 2.0f);
 
-        // Triangle-wave brightness 0..255..0 over period_ms, with per-star phase
-        uint32_t ph = (t_ms + stars[i].phase_ms) % period_ms;
-        uint32_t half = period_ms >> 1;
-        uint32_t a = (ph < half)
-                   ? (ph * 255u) / (half ? half : 1u)
-                   : ((period_ms - ph) * 255u) / (half ? half : 1u);
+        int br = (int)(minB + tri * (float)(maxB - minB) + 0.5f);
+        uint8_t g = u8clamp(br);
+        UWORD c = gray565(g);
 
-        // White at brightness 'a' on black background => packed RGB565
-        // r,b use 5 bits (>>3), g uses 6 bits (>>2)
-        UWORD c = (UWORD)(((a >> 3) << 11) | ((a >> 2) << 5) | (a >> 3));
+        // Plot as a tiny square (size ~1 or 2), clipped
+        int sz = stars[i].size;
+        int x0 = stars[i].x;
+        int y0 = stars[i].y;
 
-        // Draw a small centered square (size s)
-        int r = s / 2;               // radius on each side
-        int x0 = x - r;
-        int y0 = y - r;
-        int x1 = x0 + s - 1;
-        int y1 = y0 + s - 1;
-
-        if (x0 > W - 1 || y0 > H - 1 || x1 < 0 || y1 < 0) continue; // fully offscreen
-
+        int x1 = x0 + sz - 1;
+        int y1 = y0 + sz - 1;
         if (x0 < 0) x0 = 0;
         if (y0 < 0) y0 = 0;
         if (x1 >= W) x1 = W - 1;
         if (y1 >= H) y1 = H - 1;
 
-        for (int py = y0; py <= y1; ++py) {
-            for (int px = x0; px <= x1; ++px) {
-                PX(py, px, c);
+        for (int y = y0; y <= y1; ++y) {
+            UBYTE *row = (UBYTE*)fb + (y * W * 2);
+            for (int x = x0; x <= x1; ++x) {
+                row[2*x + 0] = (UBYTE)(c >> 8);
+                row[2*x + 1] = (UBYTE)(c & 0xFF);
             }
         }
     }
-
-    #undef PX
 }
