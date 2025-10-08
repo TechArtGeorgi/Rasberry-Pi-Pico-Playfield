@@ -11,5 +11,5 @@ extern const UWORD GRADIENT_OCEAN[4];
 extern const UWORD GRADIENT_FOREST[4];
 extern const UWORD SOLID_BLACK[1];
 extern const UWORD SOLID_WHITE[1];
-
+extern const UWORD MIDNIGHT_CITY[4];
 #endif
