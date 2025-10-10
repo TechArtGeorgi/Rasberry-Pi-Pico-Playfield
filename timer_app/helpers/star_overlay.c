@@ -1,4 +1,5 @@
 #include "star_overlay.h"
+#include "pico/stdlib.h"  
 
 /* simple LCG for stable pseudo-random in init only */
 static inline uint32_t lcg(uint32_t *s) {
@@ -38,11 +39,9 @@ void star_overlay_init(Star *stars, int count, uint32_t seed,
         r = lcg(&s);
         stars[i].y = (uint16_t)(r % H);
 
-        // random phase 0..period-1 (we’ll mod by period at draw time)
         r = lcg(&s);
         stars[i].phase_ms = (uint16_t)(r & 0xFFFFu);
 
-        // tiny sizes to avoid “big” stars look
         r = lcg(&s);
         uint8_t span = (uint8_t)(size_max - size_min + 1);
         stars[i].size = (uint8_t)(size_min + (span ? (r % span) : 0));
@@ -59,11 +58,8 @@ void star_overlay_draw(UWORD *fb, uint32_t t_ms,
     const int W = LCD_1IN14.WIDTH;
     const int H = LCD_1IN14.HEIGHT;
 
-    // For each star: compute brightness with a triangle wave
-    // phase = (t_ms + phase_ms) % period; wave 0..1..0
     for (int i = 0; i < count; ++i) {
         uint32_t phase = (t_ms + (uint32_t)stars[i].phase_ms) % period_ms;
-        // triangle in [0..1]: up on first half, down on second
         float u = (float)phase / (float)period_ms;
         float tri = (u < 0.5f) ? (u * 2.0f) : (2.0f - u * 2.0f);
 
@@ -71,7 +67,6 @@ void star_overlay_draw(UWORD *fb, uint32_t t_ms,
         uint8_t g = u8clamp(br);
         UWORD c = gray565(g);
 
-        // Plot as a tiny square (size ~1 or 2), clipped
         int sz = stars[i].size;
         int x0 = stars[i].x;
         int y0 = stars[i].y;
@@ -92,3 +87,11 @@ void star_overlay_draw(UWORD *fb, uint32_t t_ms,
         }
     }
 }
+
+void star_overlay_refresh(UWORD *fb, const Star *stars, int count) {
+    if (!fb || !stars || count <= 0) return;
+    uint32_t t_ms = to_ms_since_boot(get_absolute_time());
+    star_overlay_draw(fb, t_ms, stars, count, STAR_PERIOD_MS, STAR_MIN_B, STAR_MAX_B);
+    LCD_1IN14_Display(fb);
+}
+
