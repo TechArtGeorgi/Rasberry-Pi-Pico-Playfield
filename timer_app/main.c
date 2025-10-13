@@ -18,7 +18,7 @@
 #include "helpers/display_fb.h"
 #include "helpers/date_draw_overlay.h"
 #include "helpers/star_overlay.h"
-
+#include "helpers/mountain_overlay.h"
 /* --------------------------- Draw helpers (DRY) -------------------------- */
 static inline void paint_all(const datetime_t* t,
                              UWORD* fb,
@@ -29,6 +29,11 @@ static inline void paint_all(const datetime_t* t,
     lcd_bg_draw(fb, portrait, bg);
     uint32_t t_ms = to_ms_since_boot(get_absolute_time());
     star_overlay_draw(fb, t_ms, stars, STAR_COUNT, STAR_PERIOD_MS, STAR_MIN_B, STAR_MAX_B);
+        mountain_overlay_draw(fb,
+        0x780F, 0xF800,   // back row: darker blue gradient
+        0xFD20, 0xFBB7    // front row: bright white gradient
+    );
+    //mountain_overlay_draw(fb,0xBADC0DEu, OFFWHITE, WHITE);
     date_overlay_draw(t, 0, 6, &Font16, OFFWHITE, WHITE);   // portrait only
     sevenseg_draw_time(*t, fb, portrait, OFFWHITE, BLACK);
 
