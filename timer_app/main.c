@@ -10,16 +10,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 static void lcd_draw_time(datetime_t t, UWORD *fb) {
     ensure_dotw(&t);
     char date_line[48];
     char time_line[16];
 
-    // YY uses t.year%100; change to %04d if you want full year
     snprintf(date_line, sizeof date_line, "%s %02d/%02d/%02d",
              weekday_name(t.dotw), t.day, t.month, t.year % 100);
-
-    // HH:MM only (seconds removed)
     snprintf(time_line, sizeof time_line, "%02d:%02d", (int)t.hour, (int)t.min);
 
     Paint_Clear(BLACK);
@@ -29,7 +27,7 @@ static void lcd_draw_time(datetime_t t, UWORD *fb) {
 }
 
 int main(void) {
-    stdio_init_all();   // initializes TinyUSB (tusb) as well
+    stdio_init_all();
     rtc_init();
 
     DEV_Delay_ms(100);
@@ -51,23 +49,19 @@ int main(void) {
     rtc_get_datetime(&now);
     lcd_draw_time(now, BlackImage);
 
-    int last_sec = now.sec;
+    int last_min = now.min;
 
     for (;;) {
-        // If a full line arrived from the host, set RTC and redraw immediately.
         datetime_t just_set;
         if (poll_and_set_rtc(&just_set)) {
             lcd_draw_time(just_set, BlackImage);
-            last_sec = just_set.sec;
+            last_min = just_set.min;
         }
 
-        // Normal ticking (once per second)
         rtc_get_datetime(&now);
-        if (now.sec != last_sec) {
+        if (now.min != last_min) {
             lcd_draw_time(now, BlackImage);
-            last_sec = now.sec;
+            last_min = now.min;
         }
-
-        sleep_ms(1);
     }
 }
